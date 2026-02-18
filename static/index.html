@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF to Audiobook</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📖 PDF to Audiobook</h1>
+      <p class="subtitle">Convert any PDF into a listenable audiobook</p>
+    </header>
+
+    <main>
+      <!-- Upload Section -->
+      <section class="card" id="upload-section">
+        <div class="drop-zone" id="drop-zone">
+          <div class="drop-icon">📄</div>
+          <p class="drop-text">Tap or drop a PDF here</p>
+          <input type="file" id="file-input" accept=".pdf" hidden />
+          <button class="btn btn-outline" onclick="document.getElementById('file-input').click()">
+            Choose PDF
+          </button>
+        </div>
+        <div class="file-info hidden" id="file-info">
+          <span class="file-icon">📎</span>
+          <span id="file-name">No file selected</span>
+        </div>
+      </section>
+
+      <!-- Voice Selection -->
+      <section class="card">
+        <label class="section-label" for="voice-select">Voice</label>
+        <select id="voice-select" class="select">
+          <option value="">Loading voices...</option>
+        </select>
+      </section>
+
+      <!-- Convert Button -->
+      <button class="btn btn-primary btn-large" id="convert-btn" disabled>
+        Convert to Audiobook
+      </button>
+
+      <!-- Progress Section -->
+      <section class="card hidden" id="progress-section">
+        <div class="progress-header">
+          <span id="progress-label">Processing...</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <p class="progress-note" id="progress-note">Extracting text from PDF...</p>
+      </section>
+
+      <!-- Download Section -->
+      <section class="card hidden" id="download-section">
+        <div class="success-icon">✅</div>
+        <h2>Audiobook Ready!</h2>
+        <p id="download-note">Your audiobook has been generated.</p>
+        <a class="btn btn-primary btn-large" id="download-btn" href="#" download>
+          Download MP3
+        </a>
+        <button class="btn btn-outline" id="reset-btn">Convert Another</button>
+      </section>
+
+      <!-- Error Section -->
+      <section class="card error-card hidden" id="error-section">
+        <div class="error-icon">❌</div>
+        <h2>Conversion Failed</h2>
+        <p id="error-message">Something went wrong.</p>
+        <button class="btn btn-outline" id="error-reset-btn">Try Again</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
