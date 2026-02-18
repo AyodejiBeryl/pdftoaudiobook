@@ -1,7 +1,27 @@
 import asyncio
 import os
+import shutil
 import subprocess
 import edge_tts
+
+
+def _find_ffmpeg() -> str:
+    """Locate the ffmpeg binary, checking PATH and common install locations."""
+    path = shutil.which("ffmpeg")
+    if path:
+        return path
+    candidates = [
+        "/usr/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        r"C:\Users\ayode\ffmpeg\bin\ffmpeg.exe",
+    ]
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    raise RuntimeError(
+        "ffmpeg not found. Install it with: winget install ffmpeg (Windows) "
+        "or apt install ffmpeg (Linux)"
+    )
 
 
 async def get_voices() -> list[dict]:
@@ -93,7 +113,7 @@ def merge_audio_files(audio_files: list[str], output_path: str) -> None:
     try:
         subprocess.run(
             [
-                "ffmpeg", "-y",
+                _find_ffmpeg(), "-y",
                 "-f", "concat",
                 "-safe", "0",
                 "-i", list_path,
