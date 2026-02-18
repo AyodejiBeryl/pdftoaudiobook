@@ -12,6 +12,10 @@ outputs/
 
 # PDF files in root (test files)
 *.pdf
+# But allow static assets
+!static/*.png
+!static/*.jpg
+!static/*.ico
 
 # OS
 .DS_Store

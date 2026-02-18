@@ -37,6 +37,15 @@ header {
   padding: 2rem 0 1.5rem;
 }
 
+.logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  margin-bottom: 0.6rem;
+  /* Knock out the white background so it blends with dark theme */
+  mix-blend-mode: screen;
+}
+
 header h1 {
   font-size: 1.75rem;
   font-weight: 700;
