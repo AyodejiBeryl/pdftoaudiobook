@@ -10,6 +10,9 @@ venv/
 uploads/
 outputs/
 
+# PDF files in root (test files)
+*.pdf
+
 # OS
 .DS_Store
 Thumbs.db
