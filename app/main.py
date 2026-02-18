@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 import uuid
 from pathlib import Path
 from typing import Dict, Any
@@ -25,13 +26,21 @@ STATIC_DIR = BASE_DIR / "static"
 UPLOADS_DIR.mkdir(exist_ok=True)
 OUTPUTS_DIR.mkdir(exist_ok=True)
 
-app = FastAPI(title="PDF to Audiobook")
+app = FastAPI(title="Zelos Audiobook Converter")
 
-# In-memory job store
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+JOB_TTL_SECONDS = 2 * 60 * 60       # 2 hours
+
+# In-memory job store: {job_id: {..., "created_at": float}}
 jobs: Dict[str, Any] = {}
 
 # Cache voices so we don't re-fetch on every request
 _voices_cache: list[dict] | None = None
+
+
+@app.on_event("startup")
+async def start_cleanup_task():
+    asyncio.create_task(_periodic_cleanup())
 
 
 @app.get("/api/voices")
@@ -51,11 +60,17 @@ async def convert(
     if ext not in SUPPORTED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported.")
 
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum allowed size is {MAX_UPLOAD_BYTES // 1024 // 1024} MB."
+        )
+
     job_id = str(uuid.uuid4())
     file_path = UPLOADS_DIR / f"{job_id}{ext}"
 
     async with aiofiles.open(file_path, "wb") as f:
-        content = await file.read()
         await f.write(content)
 
     jobs[job_id] = {
@@ -63,6 +78,7 @@ async def convert(
         "progress": 0,
         "total": 0,
         "filename": file.filename,
+        "created_at": time.time(),
         "error": None,
     }
 
@@ -130,6 +146,21 @@ async def _run_conversion(job_id: str, pdf_path: Path, voice: str):
             pdf_path.unlink()
         except OSError:
             pass
+
+
+async def _periodic_cleanup():
+    """Remove jobs and their output files older than JOB_TTL_SECONDS every 30 minutes."""
+    while True:
+        await asyncio.sleep(30 * 60)
+        cutoff = time.time() - JOB_TTL_SECONDS
+        expired = [jid for jid, j in jobs.items() if j.get("created_at", 0) < cutoff]
+        for jid in expired:
+            output = OUTPUTS_DIR / f"{jid}.mp3"
+            try:
+                output.unlink(missing_ok=True)
+            except OSError:
+                pass
+            jobs.pop(jid, None)
 
 
 # Serve frontend — must be last

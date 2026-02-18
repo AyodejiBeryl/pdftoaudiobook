@@ -215,6 +215,17 @@ main {
 
 #download-note { color: var(--muted); font-size: 0.9rem; }
 
+.ephemeral-note {
+  font-size: 0.78rem;
+  color: #c8922a;
+  background: rgba(200, 146, 42, 0.1);
+  border: 1px solid rgba(200, 146, 42, 0.25);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+  text-align: center;
+}
+
 #download-section .btn-primary { width: 100%; }
 #download-section .btn-outline { width: 100%; }
 

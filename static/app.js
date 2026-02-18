@@ -148,9 +148,11 @@ function startPolling(jobId) {
         const pct = Math.round((done / total) * 100);
         progressFill.style.width = pct + "%";
         progressPct.textContent = pct + "%";
+        const fileType = selectedFile && selectedFile.name.toLowerCase().endsWith(".docx")
+          ? "Word document" : "PDF";
         progressNote.textContent =
           done === 0
-            ? "Extracting and cleaning text from PDF..."
+            ? `Extracting and cleaning text from ${fileType}...`
             : `Converting chunk ${done} of ${total}...`;
       } else if (job.status === "done") {
         clearInterval(pollInterval);
