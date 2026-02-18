@@ -17,6 +17,7 @@ from app.tts_engine import (
     merge_audio_files,
     cleanup_chunks,
 )
+from app.llm_cleaner import clean_chunks_with_llm
 
 BASE_DIR = Path(__file__).parent.parent
 UPLOADS_DIR = BASE_DIR / "uploads"
@@ -75,6 +76,7 @@ async def convert(
 
     jobs[job_id] = {
         "status": "processing",
+        "phase": "extracting",
         "progress": 0,
         "total": 0,
         "filename": file.filename,
@@ -115,8 +117,10 @@ def download(job_id: str):
 
 
 async def _run_conversion(job_id: str, pdf_path: Path, voice: str):
-    """Background task: extract text, convert to speech, merge audio."""
+    """Background task: extract → LLM clean → TTS → merge."""
     try:
+        # Phase 1: Extract text
+        jobs[job_id]["phase"] = "extracting"
         text = extract_text(str(pdf_path))
         if not text.strip():
             jobs[job_id].update({"status": "error", "error": "No readable text found in the document."})
@@ -125,14 +129,27 @@ async def _run_conversion(job_id: str, pdf_path: Path, voice: str):
         chunks = chunk_text(text)
         jobs[job_id]["total"] = len(chunks)
 
-        async def on_progress(done: int, total: int):
+        # Phase 2: LLM cleaning (skipped gracefully if no API key)
+        jobs[job_id].update({"phase": "cleaning", "progress": 0})
+
+        async def on_clean_progress(done: int, total: int):
+            jobs[job_id]["progress"] = done
+
+        chunks = await clean_chunks_with_llm(chunks, progress_callback=on_clean_progress)
+
+        # Phase 3: TTS conversion
+        jobs[job_id].update({"phase": "converting", "progress": 0})
+
+        async def on_tts_progress(done: int, total: int):
             jobs[job_id]["progress"] = done
 
         chunk_files = await convert_chunks_to_audio(
             chunks, voice, str(UPLOADS_DIR), job_id,
-            progress_callback=on_progress,
+            progress_callback=on_tts_progress,
         )
 
+        # Phase 4: Merge
+        jobs[job_id]["phase"] = "merging"
         output_path = OUTPUTS_DIR / f"{job_id}.mp3"
         merge_audio_files(chunk_files, str(output_path))
         cleanup_chunks(chunk_files)

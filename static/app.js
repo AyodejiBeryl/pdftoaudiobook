@@ -146,14 +146,24 @@ function startPolling(jobId) {
         const total = job.total || 1;
         const done = job.progress || 0;
         const pct = Math.round((done / total) * 100);
-        progressFill.style.width = pct + "%";
-        progressPct.textContent = pct + "%";
+        const phase = job.phase || "extracting";
         const fileType = selectedFile && selectedFile.name.toLowerCase().endsWith(".docx")
           ? "Word document" : "PDF";
-        progressNote.textContent =
-          done === 0
-            ? `Extracting and cleaning text from ${fileType}...`
-            : `Converting chunk ${done} of ${total}...`;
+
+        const phaseMessages = {
+          extracting: `Extracting text from ${fileType}...`,
+          cleaning:   done === 0
+            ? "Preparing AI text cleanup..."
+            : `AI cleaning chunk ${done} of ${total}...`,
+          converting: done === 0
+            ? "Starting audio conversion..."
+            : `Generating audio ${done} of ${total}...`,
+          merging:    "Merging audio into final file...",
+        };
+
+        progressFill.style.width = pct + "%";
+        progressPct.textContent = pct + "%";
+        progressNote.textContent = phaseMessages[phase] || "Processing...";
       } else if (job.status === "done") {
         clearInterval(pollInterval);
         progressFill.style.width = "100%";

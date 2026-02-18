@@ -1,6 +1,9 @@
 import os
 import socket
 import uvicorn
+from dotenv import load_dotenv
+
+load_dotenv()  # Load .env file if present (local dev); Railway injects vars directly
 
 # Local Windows: ensure ffmpeg is on PATH
 FFMPEG_BIN = r"C:\Users\ayode\ffmpeg\bin"
