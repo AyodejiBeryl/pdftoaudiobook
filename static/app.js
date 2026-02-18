@@ -83,8 +83,9 @@ function updateConvertBtn() {
 
 // ── File selection ──
 function handleFile(file) {
-  if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
-    alert("Please select a PDF file.");
+  const ext = file.name.split(".").pop().toLowerCase();
+  if (!file || !["pdf", "docx"].includes(ext)) {
+    alert("Please select a PDF or DOCX file.");
     return;
   }
   selectedFile = file;

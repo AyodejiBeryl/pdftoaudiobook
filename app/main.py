@@ -9,7 +9,7 @@ from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.pdf_parser import extract_text, chunk_text
+from app.pdf_parser import extract_text, chunk_text, SUPPORTED_EXTENSIONS
 from app.tts_engine import (
     get_voices,
     convert_chunks_to_audio,
@@ -47,13 +47,14 @@ async def convert(
     file: UploadFile = File(...),
     voice: str = Form(default="en-US-AriaNeural"),
 ):
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    ext = Path(file.filename).suffix.lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported.")
 
     job_id = str(uuid.uuid4())
-    pdf_path = UPLOADS_DIR / f"{job_id}.pdf"
+    file_path = UPLOADS_DIR / f"{job_id}{ext}"
 
-    async with aiofiles.open(pdf_path, "wb") as f:
+    async with aiofiles.open(file_path, "wb") as f:
         content = await file.read()
         await f.write(content)
 
@@ -65,7 +66,7 @@ async def convert(
         "error": None,
     }
 
-    asyncio.create_task(_run_conversion(job_id, pdf_path, voice))
+    asyncio.create_task(_run_conversion(job_id, file_path, voice))
     return {"job_id": job_id}
 
 
@@ -102,7 +103,7 @@ async def _run_conversion(job_id: str, pdf_path: Path, voice: str):
     try:
         text = extract_text(str(pdf_path))
         if not text.strip():
-            jobs[job_id].update({"status": "error", "error": "No readable text found in PDF."})
+            jobs[job_id].update({"status": "error", "error": "No readable text found in the document."})
             return
 
         chunks = chunk_text(text)

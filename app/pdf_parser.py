@@ -1,24 +1,59 @@
 import re
 from collections import Counter
+from pathlib import Path
 import fitz  # PyMuPDF
+from docx import Document
 
 
-def extract_text(pdf_path: str) -> str:
-    """Extract and clean text from a PDF file."""
+SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
+
+
+def extract_text(file_path: str) -> str:
+    """Extract and clean text from a PDF or DOCX file."""
+    ext = Path(file_path).suffix.lower()
+    if ext == ".pdf":
+        return _extract_pdf(file_path)
+    elif ext == ".docx":
+        return _extract_docx(file_path)
+    else:
+        raise ValueError(f"Unsupported file type: {ext}")
+
+
+def _extract_pdf(pdf_path: str) -> str:
+    """Extract text from a PDF using PyMuPDF."""
     doc = fitz.open(pdf_path)
-    pages_text = []
-
-    for page in doc:
-        text = page.get_text("text")
-        pages_text.append(text)
-
+    pages_text = [page.get_text("text") for page in doc]
     doc.close()
-
-    # Detect and remove repeating headers/footers before joining
     pages_text = remove_repeated_lines(pages_text)
+    return clean_text("\n".join(pages_text))
 
-    raw_text = "\n".join(pages_text)
-    return clean_text(raw_text)
+
+def _extract_docx(docx_path: str) -> str:
+    """Extract text from a DOCX file using python-docx."""
+    doc = Document(docx_path)
+    paragraphs = []
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            paragraphs.append("")
+            continue
+        # Prefix headings with a pause-friendly label
+        if para.style.name.startswith("Heading"):
+            paragraphs.append(f"\n{text}\n")
+        else:
+            paragraphs.append(text)
+
+    # Also extract text from tables
+    for table in doc.tables:
+        for row in table.rows:
+            row_text = " | ".join(
+                cell.text.strip() for cell in row.cells if cell.text.strip()
+            )
+            if row_text:
+                paragraphs.append(row_text)
+
+    return clean_text("\n".join(paragraphs))
 
 
 def remove_repeated_lines(pages: list[str]) -> list[str]:
