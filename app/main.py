@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.pdf_parser import extract_text, chunk_text
 from app.tts_engine import (
-    VOICES,
+    get_voices,
     convert_chunks_to_audio,
     merge_audio_files,
     cleanup_chunks,
@@ -27,13 +27,19 @@ OUTPUTS_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="PDF to Audiobook")
 
-# In-memory job store: {job_id: {status, progress, total, filename, error}}
+# In-memory job store
 jobs: Dict[str, Any] = {}
+
+# Cache voices so we don't re-fetch on every request
+_voices_cache: list[dict] | None = None
 
 
 @app.get("/api/voices")
-def get_voices():
-    return {"voices": [{"id": k, "label": v} for k, v in VOICES.items()]}
+async def api_get_voices():
+    global _voices_cache
+    if _voices_cache is None:
+        _voices_cache = await get_voices()
+    return {"voices": _voices_cache}
 
 
 @app.post("/api/convert")
@@ -44,18 +50,13 @@ async def convert(
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
-    if voice not in VOICES:
-        raise HTTPException(status_code=400, detail="Invalid voice selected.")
-
     job_id = str(uuid.uuid4())
     pdf_path = UPLOADS_DIR / f"{job_id}.pdf"
 
-    # Save uploaded PDF
     async with aiofiles.open(pdf_path, "wb") as f:
         content = await file.read()
         await f.write(content)
 
-    # Register job
     jobs[job_id] = {
         "status": "processing",
         "progress": 0,
@@ -64,9 +65,7 @@ async def convert(
         "error": None,
     }
 
-    # Run conversion in background
     asyncio.create_task(_run_conversion(job_id, pdf_path, voice))
-
     return {"job_id": job_id}
 
 
@@ -101,7 +100,6 @@ def download(job_id: str):
 async def _run_conversion(job_id: str, pdf_path: Path, voice: str):
     """Background task: extract text, convert to speech, merge audio."""
     try:
-        # Extract and chunk text
         text = extract_text(str(pdf_path))
         if not text.strip():
             jobs[job_id].update({"status": "error", "error": "No readable text found in PDF."})
@@ -113,16 +111,11 @@ async def _run_conversion(job_id: str, pdf_path: Path, voice: str):
         async def on_progress(done: int, total: int):
             jobs[job_id]["progress"] = done
 
-        # Convert to audio chunks
         chunk_files = await convert_chunks_to_audio(
-            chunks,
-            voice,
-            str(UPLOADS_DIR),
-            job_id,
+            chunks, voice, str(UPLOADS_DIR), job_id,
             progress_callback=on_progress,
         )
 
-        # Merge into final audiobook
         output_path = OUTPUTS_DIR / f"{job_id}.mp3"
         merge_audio_files(chunk_files, str(output_path))
         cleanup_chunks(chunk_files)
@@ -132,12 +125,11 @@ async def _run_conversion(job_id: str, pdf_path: Path, voice: str):
     except Exception as e:
         jobs[job_id].update({"status": "error", "error": str(e)})
     finally:
-        # Clean up uploaded PDF
         try:
             pdf_path.unlink()
         except OSError:
             pass
 
 
-# Serve frontend — must be last to avoid route conflicts
+# Serve frontend — must be last
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")

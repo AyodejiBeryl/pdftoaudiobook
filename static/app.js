@@ -2,6 +2,7 @@ const dropZone = document.getElementById("drop-zone");
 const fileInput = document.getElementById("file-input");
 const fileInfo = document.getElementById("file-info");
 const fileName = document.getElementById("file-name");
+const languageSelect = document.getElementById("language-select");
 const voiceSelect = document.getElementById("voice-select");
 const convertBtn = document.getElementById("convert-btn");
 const progressSection = document.getElementById("progress-section");
@@ -16,21 +17,69 @@ const errorMessage = document.getElementById("error-message");
 
 let selectedFile = null;
 let pollInterval = null;
+let allVoices = [];
 
 // ── Load voices ──
 async function loadVoices() {
   try {
     const res = await fetch("/api/voices");
     const data = await res.json();
-    voiceSelect.innerHTML = data.voices
-      .map((v) => `<option value="${v.id}">${v.label}</option>`)
-      .join("");
+    allVoices = data.voices;
+
+    // Build unique language list, preserving order
+    const seen = new Set();
+    const languages = [];
+    for (const v of allVoices) {
+      const key = v.language.split("-")[0];
+      if (!seen.has(key)) {
+        seen.add(key);
+        languages.push({ code: key, name: v.language_name });
+      }
+    }
+    languages.sort((a, b) => a.name.localeCompare(b.name));
+
+    languageSelect.innerHTML =
+      '<option value="">— Select language —</option>' +
+      languages
+        .map((l) => `<option value="${l.code}">${l.name}</option>`)
+        .join("");
   } catch {
-    voiceSelect.innerHTML = '<option value="en-US-AriaNeural">Aria (US Female)</option>';
+    languageSelect.innerHTML = '<option value="">Failed to load voices</option>';
   }
 }
 
 loadVoices();
+
+// ── Language → Voice cascade ──
+languageSelect.addEventListener("change", () => {
+  const langCode = languageSelect.value;
+  if (!langCode) {
+    voiceSelect.innerHTML = '<option value="">Select a language first</option>';
+    voiceSelect.disabled = true;
+    updateConvertBtn();
+    return;
+  }
+
+  const filtered = allVoices.filter((v) =>
+    v.language.toLowerCase().startsWith(langCode.toLowerCase())
+  );
+
+  voiceSelect.innerHTML = filtered
+    .map((v) => {
+      const region = v.language.split("-")[1] || "";
+      const gender = v.gender === "Female" ? "♀" : "♂";
+      return `<option value="${v.id}">${gender} ${v.label} (${region})</option>`;
+    })
+    .join("");
+  voiceSelect.disabled = false;
+  updateConvertBtn();
+});
+
+voiceSelect.addEventListener("change", updateConvertBtn);
+
+function updateConvertBtn() {
+  convertBtn.disabled = !(selectedFile && voiceSelect.value);
+}
 
 // ── File selection ──
 function handleFile(file) {
@@ -41,35 +90,28 @@ function handleFile(file) {
   selectedFile = file;
   fileName.textContent = file.name;
   fileInfo.classList.remove("hidden");
-  convertBtn.disabled = false;
+  updateConvertBtn();
 }
 
 fileInput.addEventListener("change", () => handleFile(fileInput.files[0]));
 
-// Drag and drop
 dropZone.addEventListener("dragover", (e) => {
   e.preventDefault();
   dropZone.classList.add("drag-over");
 });
-
 dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
-
 dropZone.addEventListener("drop", (e) => {
   e.preventDefault();
   dropZone.classList.remove("drag-over");
   handleFile(e.dataTransfer.files[0]);
 });
-
-// Tap on drop zone (mobile)
 dropZone.addEventListener("click", (e) => {
-  if (e.target.tagName !== "BUTTON") {
-    fileInput.click();
-  }
+  if (e.target.tagName !== "BUTTON") fileInput.click();
 });
 
 // ── Convert ──
 convertBtn.addEventListener("click", async () => {
-  if (!selectedFile) return;
+  if (!selectedFile || !voiceSelect.value) return;
 
   convertBtn.disabled = true;
   showProgress();
@@ -87,7 +129,7 @@ convertBtn.addEventListener("click", async () => {
     }
     const { job_id } = await res.json();
     startPolling(job_id);
-  } catch (e) {
+  } catch {
     showError("Could not connect to server.");
   }
 });
@@ -102,22 +144,18 @@ function startPolling(jobId) {
       if (job.status === "processing") {
         const total = job.total || 1;
         const done = job.progress || 0;
-        const pct = total ? Math.round((done / total) * 100) : 0;
-
+        const pct = Math.round((done / total) * 100);
         progressFill.style.width = pct + "%";
         progressPct.textContent = pct + "%";
-
-        if (done === 0) {
-          progressNote.textContent = "Extracting text from PDF...";
-        } else {
-          progressNote.textContent = `Converting chunk ${done} of ${total}...`;
-        }
+        progressNote.textContent =
+          done === 0
+            ? "Extracting and cleaning text from PDF..."
+            : `Converting chunk ${done} of ${total}...`;
       } else if (job.status === "done") {
         clearInterval(pollInterval);
         progressFill.style.width = "100%";
         progressPct.textContent = "100%";
         progressNote.textContent = "Finalizing audiobook...";
-
         setTimeout(() => showDownload(jobId, job.filename), 600);
       } else if (job.status === "error") {
         clearInterval(pollInterval);
@@ -159,7 +197,6 @@ function showError(msg) {
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
 
-// ── Reset buttons ──
 document.getElementById("reset-btn").addEventListener("click", resetApp);
 document.getElementById("error-reset-btn").addEventListener("click", resetApp);
 
@@ -168,7 +205,7 @@ function resetApp() {
   fileInput.value = "";
   fileName.textContent = "";
   fileInfo.classList.add("hidden");
-  convertBtn.disabled = true;
+  updateConvertBtn();
   hide(downloadSection);
   hide(errorSection);
   hide(progressSection);

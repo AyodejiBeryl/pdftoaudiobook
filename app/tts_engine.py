@@ -4,14 +4,54 @@ import subprocess
 import edge_tts
 
 
-VOICES = {
-    "en-US-AriaNeural": "Aria (US Female)",
-    "en-US-GuyNeural": "Guy (US Male)",
-    "en-US-JennyNeural": "Jenny (US Female)",
-    "en-GB-SoniaNeural": "Sonia (UK Female)",
-    "en-GB-RyanNeural": "Ryan (UK Male)",
-    "en-AU-NatashaNeural": "Natasha (AU Female)",
-}
+async def get_voices() -> list[dict]:
+    """Fetch all available edge-tts voices grouped by language."""
+    voices = await edge_tts.list_voices()
+    result = []
+    for v in sorted(voices, key=lambda x: (x["Locale"], x["ShortName"])):
+        result.append({
+            "id": v["ShortName"],
+            "label": v["FriendlyName"],
+            "language": v["Locale"],
+            "language_name": _locale_to_name(v["Locale"]),
+            "gender": v["Gender"],
+        })
+    return result
+
+
+def _locale_to_name(locale: str) -> str:
+    """Convert a locale code to a human-readable language name."""
+    mapping = {
+        "af": "Afrikaans", "am": "Amharic", "ar": "Arabic",
+        "az": "Azerbaijani", "bg": "Bulgarian", "bn": "Bengali",
+        "bs": "Bosnian", "ca": "Catalan", "cs": "Czech",
+        "cy": "Welsh", "da": "Danish", "de": "German",
+        "el": "Greek", "en": "English", "es": "Spanish",
+        "et": "Estonian", "fa": "Persian", "fi": "Finnish",
+        "fil": "Filipino", "fr": "French", "ga": "Irish",
+        "gl": "Galician", "gu": "Gujarati", "he": "Hebrew",
+        "hi": "Hindi", "hr": "Croatian", "hu": "Hungarian",
+        "hy": "Armenian", "id": "Indonesian", "is": "Icelandic",
+        "it": "Italian", "ja": "Japanese", "jv": "Javanese",
+        "ka": "Georgian", "kk": "Kazakh", "km": "Khmer",
+        "kn": "Kannada", "ko": "Korean", "lo": "Lao",
+        "lt": "Lithuanian", "lv": "Latvian", "mk": "Macedonian",
+        "ml": "Malayalam", "mn": "Mongolian", "mr": "Marathi",
+        "ms": "Malay", "mt": "Maltese", "my": "Burmese",
+        "nb": "Norwegian", "ne": "Nepali", "nl": "Dutch",
+        "or": "Odia", "pa": "Punjabi", "pl": "Polish",
+        "ps": "Pashto", "pt": "Portuguese", "ro": "Romanian",
+        "ru": "Russian", "si": "Sinhala", "sk": "Slovak",
+        "sl": "Slovenian", "so": "Somali", "sq": "Albanian",
+        "sr": "Serbian", "su": "Sundanese", "sv": "Swedish",
+        "sw": "Swahili", "ta": "Tamil", "te": "Telugu",
+        "th": "Thai", "tr": "Turkish", "uk": "Ukrainian",
+        "ur": "Urdu", "uz": "Uzbek", "vi": "Vietnamese",
+        "wuu": "Chinese (Wu)", "yue": "Chinese (Cantonese)",
+        "yo": "Yoruba", "zh": "Chinese (Mandarin)", "zu": "Zulu",
+    }
+    lang_code = locale.split("-")[0].lower()
+    return mapping.get(lang_code, locale)
 
 
 async def text_chunk_to_audio(text: str, voice: str, output_path: str) -> None:
@@ -44,11 +84,9 @@ async def convert_chunks_to_audio(
 
 def merge_audio_files(audio_files: list[str], output_path: str) -> None:
     """Merge multiple mp3 files into a single audiobook file using ffmpeg."""
-    # Write a concat list file for ffmpeg
     list_path = output_path + ".txt"
     with open(list_path, "w", encoding="utf-8") as f:
         for path in audio_files:
-            # ffmpeg concat demuxer requires forward slashes and escaped paths
             safe = path.replace("\\", "/").replace("'", "\\'")
             f.write(f"file '{safe}'\n")
 
@@ -59,9 +97,9 @@ def merge_audio_files(audio_files: list[str], output_path: str) -> None:
                 "-f", "concat",
                 "-safe", "0",
                 "-i", list_path,
-                "-ac", "1",        # mono (sufficient for speech)
-                "-ar", "22050",    # 22kHz sample rate (sufficient for speech)
-                "-b:a", "32k",     # 32kbps — great quality for speech, small file
+                "-ac", "1",
+                "-ar", "22050",
+                "-b:a", "32k",
                 output_path,
             ],
             check=True,

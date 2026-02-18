@@ -30,11 +30,16 @@
         </div>
       </section>
 
-      <!-- Voice Selection -->
+      <!-- Language + Voice Selection -->
       <section class="card">
-        <label class="section-label" for="voice-select">Voice</label>
+        <label class="section-label" for="language-select">Language</label>
+        <select id="language-select" class="select">
+          <option value="">Loading languages...</option>
+        </select>
+
+        <label class="section-label" for="voice-select" style="margin-top:1rem;">Voice</label>
         <select id="voice-select" class="select">
-          <option value="">Loading voices...</option>
+          <option value="">Select a language first</option>
         </select>
       </section>
 
